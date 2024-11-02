@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>UMPIRE Interview Prep</title>
+    <!-- Include Monaco Editor CSS -->
+    <link rel="stylesheet" data-name="vs/editor/editor.main"
+          href="https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs/editor/editor.main.css">
+    <!-- Your custom styles -->
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+        .split {
+            height: 100%;
+            display: flex;
+        }
+        .split-horizontal {
+            display: flex;
+            flex-direction: column;
+        }
+        .gutter {
+            background-color: #eee;
+            background-repeat: no-repeat;
+            background-position: 50%;
+        }
+        .gutter.gutter-horizontal {
+            cursor: ew-resize;
+        }
+        .gutter.gutter-vertical {
+            cursor: ns-resize;
+        }
+        #editor-pane, #right-pane {
+            overflow: hidden;
+        }
+        #video-feed, #chat {
+            overflow: hidden;
+        }
+        #chat {
+            display: flex;
+            flex-direction: column;
+        }
+        #chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        #chat-input {
+            display: flex;
+        }
+        #chat-input textarea {
+            flex: 1;
+            resize: none;
+        }
+        #chat-input button {
+            width: 50px;
+        }
+        #chat-input #send-button {
+            width: 100px;
+        }
+        /* Optional: Customize the appearance of the gutters */
+        .gutter {
+            background-color: #ddd;
+        }
+    </style>
+    <!-- Include Split.js -->
+    <script src="https://cdn.jsdelivr.net/npm/split.js/dist/split.min.js"></script>
+</head>
+<body>
+    <div id="split-container" class="split">
+        <div id="editor-pane">
+            <div id="editor" style="width: 100%; height: 100%;"></div>
+        </div>
+        <div id="right-pane" class="split split-horizontal">
+            <div id="video-feed" style="width: 100%; height: 100%;">
+                <video id="videoElement" autoplay muted style="width:100%; height:100%;"></video>
+            </div>
+            <div id="chat" style="width: 100%; height: 100%;">
+                <div id="chat-messages"></div>
+                <div id="chat-input">
+                    <textarea id="user-input" rows="2"></textarea>
+                    <button id="send-button">Send</button>
+                    <button id="voice-button">🎤</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include Monaco Editor -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs/loader.js"></script>
+
+    <!-- Your initialization scripts -->
+    <script>
+        // Initialize Monaco Editor
+        require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            var editor = monaco.editor.create(document.getElementById('editor'), {
+                value: '',
+                language: 'javascript',
+                theme: 'vs-dark'
+            });
+        });
+
+        // Initialize Split.js for vertical split between editor and right pane
+        Split(['#editor-pane', '#right-pane'], {
+            sizes: [50, 50],
+            minSize: 200,
+            gutterSize: 8,
+            cursor: 'col-resize'
+        });
+
+        // Initialize Split.js for horizontal split between video feed and chat within the right pane
+        Split(['#video-feed', '#chat'], {
+            sizes: [50, 50],
+            minSize: 100,
+            gutterSize: 8,
+            direction: 'vertical',
+            cursor: 'row-resize',
+            parent: document.getElementById('right-pane')
+        });
+
+        // Webcam script
+        var video = document.getElementById('videoElement');
+
+        if (navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(stream) {
+                    video.srcObject = stream;
+                })
+                .catch(function(error) {
+                    console.log("Something went wrong!", error);
+                });
+        }
+
+        // Chat script with voice input/output
+        var sendButton = document.getElementById('send-button');
+        var userInput = document.getElementById('user-input');
+        var chatMessages = document.getElementById('chat-messages');
+        var voiceButton = document.getElementById('voice-button');
+
+        // Speech Recognition
+        var SpeechRecognition = SpeechRecognition || webkitSpeechRecognition;
+        var recognition = new SpeechRecognition();
+
+        recognition.continuous = false;
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        voiceButton.addEventListener('click', function() {
+            recognition.start();
+        });
+
+        recognition.onresult = function(event) {
+            var speechResult = event.results[0][0].transcript;
+            userInput.value = speechResult;
+            sendButton.click();
+        };
+
+        recognition.onerror = function(event) {
+            console.error('Speech recognition error', event);
+        };
+
+        // Speech Synthesis
+        function speak(text) {
+            var synth = window.speechSynthesis;
+            var utterThis = new SpeechSynthesisUtterance(text);
+            synth.speak(utterThis);
+        }
+
+        sendButton.addEventListener('click', function() {
+            var message = userInput.value;
+            if (message.trim() === '') return;
+            appendMessage('You', message);
+            userInput.value = '';
+            // Send message to server
+            fetch('/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message: message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                appendMessage('Assistant', data.reply);
+            });
+        });
+
+        function appendMessage(sender, message) {
+            var messageElement = document.createElement('div');
+            messageElement.innerHTML = '<strong>' + sender + ':</strong> ' + message;
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            if (sender === 'Assistant') {
+                speak(message);
+            }
+        }
+    </script>
+</body>
+</html>
